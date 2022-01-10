@@ -1,0 +1,12 @@
+<vaultpackage xmlns="https://veevavault.com/">
+  <name>PKG-Endo-JSDK-General</name>
+  <source>
+    <vault></vault>
+    <author>stephen.lisowski@cresensolutions.com</author>
+  </source>
+  <summary>Endo General</summary>
+  <description>General vsdk modules for Vault PromoMats at Endo.</description>
+  <javasdk>
+    <deployment_option>incremental</deployment_option>
+  </javasdk>
+</vaultpackage>
