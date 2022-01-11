@@ -24,6 +24,8 @@ public class ExpirationUpcomingTasks implements Job {
 
     private static final long PENDING_RANGE_HIGH = 60;
     private static final long PENDING_RANGE_LOW = 55;
+    // the number of days before a Job's Expiration Date that the pending expiration task should be cancelled...
+    private static final long TASK_KILL_THRESHOLD_DAYS = 15;
 
     public JobInputSupplier init(JobInitContext jobInitContext) {
 
@@ -38,7 +40,7 @@ public class ExpirationUpcomingTasks implements Job {
         LocalDate dateTo = dateNow.plusDays(PENDING_RANGE_HIGH);
 
         StringBuilder sbQuery = new StringBuilder()
-          .append("select version_id, document_number__v")
+          .append("select version_id, document_number__v, expiration_date__c")
           .append("  from documents")
           .append(" where toName(type__v) contains ('jobs__c', 'nprc__c', 'par__c', 'endoaesthetics__c')")
           .append("   and status__v = steadyState()")
@@ -59,11 +61,13 @@ public class ExpirationUpcomingTasks implements Job {
         while (iter.hasNext()) {
           QueryResult qr = iter.next();
           String docNbr = qr.getValue("document_number__v", ValueType.STRING);
-          logger.log("Found " + docNbr);
           String docVersionId = qr.getValue("version_id", ValueType.STRING);
+          LocalDate expirationDate = qr.getValue("expiration_date__c", ValueType.DATE);
+          logger.log("Found " + docNbr + " v" + docVersionId + " with expiration date " + expirationDate.toString());
           JobItem jobItem = jobInitContext.newJobItem();
           jobItem.setValue("docNumber", docNbr);
           jobItem.setValue("docVersionId", docVersionId);
+          jobItem.setValue("expirationDate", expirationDate);
           jobItems.add(jobItem);
         }
 
@@ -82,23 +86,28 @@ public class ExpirationUpcomingTasks implements Job {
 
         String docNumber = jobItem.getValue("docNumber", JobValueType.STRING);
         String docVersionId = jobItem.getValue("docVersionId", JobValueType.STRING);
+        LocalDate expirationDate = jobItem.getValue("expirationDate", JobValueType.DATE);
+
+        LocalDate taskKillDate = expirationDate.minusDays(TASK_KILL_THRESHOLD_DAYS);
 
         logger.log("Processing material: " + docNumber);
 
         List<String> userIds = Util.getDocumentUsersInRole(docVersionId, "project_manager__c");
 
-        List<HttpParam> roleUsers = VaultCollections.newList();
+        List<HttpParam> workflowStartCriteria = VaultCollections.newList();
 
         for (String userId : userIds) {
           logger.log("Found user in role Project Manager: " + userId);
-          roleUsers.add(new HttpParam("user_control_multiple__c", "user:" + userId));
+          workflowStartCriteria.add(new HttpParam("user_control_multiple__c", "user:" + userId));
         }
+
+        workflowStartCriteria.add(new HttpParam("date_control1__c", taskKillDate.toString()));
 
         logger.log("Executing workflow for " + docNumber);
         DocumentsAPI api = new DocumentsAPI("local_connection__c");
         api
           .setJobLogger(logger)
-          .executeUserAction(docVersionId, "expiration_pending_autostart", roleUsers);
+          .executeUserAction(docVersionId, "expiration_pending_autostart", workflowStartCriteria);
         if (api.failed()) {
           logger.log(api.getErrorType() + ": " + api.getErrorMessage());
           logger.log("Unable to execute workflow for "+docNumber+".");
