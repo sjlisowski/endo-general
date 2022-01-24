@@ -69,9 +69,11 @@ public class Util {
   /**
    * Return a comma-delimited string build from a list of strings.
    * @param list - List<String>.  the list
+   * @param separator - String. Optional.  What should separate the individual items
+   *                  in the resulting string.  Default value is ", ".
    * @return String
    */
-  public static String stringifyList(List<String> list) {
+  public static String stringifyList(List<String> list, String separator) {
 
     StringBuilder sb = new StringBuilder();
 
@@ -80,11 +82,14 @@ public class Util {
     while (iter.hasNext()) {
       sb.append(iter.next());
       if (iter.hasNext()) {
-        sb.append(", ");
+        sb.append(separator);
       }
     }
 
     return sb.toString();
+  }
+  public static String stringifyList(List<String> list) {
+    return Util.stringifyList(list, ", ");
   }
 
   /**

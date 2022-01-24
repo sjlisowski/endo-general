@@ -8,16 +8,35 @@ import com.veeva.vault.sdk.api.json.JsonArray;
 import com.veeva.vault.sdk.api.json.JsonObject;
 import com.veeva.vault.sdk.api.json.JsonValueType;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 /*
- This class contains methods that wrap the Vault Documents API in a convenient way.
+ This class contains methods that wrap the Vault API in a convenient way.
+
+ Methods in this class do not throw exceptions.  Successful completion of
+ a method is determined by calling the failed() method.
+
+ Example usage:
+
+      VAPI vapi = new VAPI("local_connection__c");
+      vapi
+        .setJobLogger(logger)
+        .executeUserAction(docVersionId, "expiration_pending_autostart", workflowStartCriteria);
+      if (vapi.failed()) {
+        ...
+      }
+
+ Methods in this class include:
+   - cancelWorkflowTasks: initiate workflow actions on one or more workflows - cancel tasks
+   - executeUserAction: execute a document lifecycle user action
+   - query: execute a Vault API query
  */
 
 @UserDefinedClassInfo()
-public class DocumentsAPI {
+public class VAPI {
 
-  static final String APIVersion = "v21.2";
+  static final String APIVersion = "v21.3";
 
   private boolean succeeded;
   private String errorType;
@@ -28,16 +47,16 @@ public class DocumentsAPI {
   private Logger logger = new Logger();
 
   // use localHttpRequest to access the api
-  public DocumentsAPI() {
+  public VAPI() {
     this.connection = null;
   }
 
   // Use a connection to access the api
-  public DocumentsAPI(String connection) {
+  public VAPI(String connection) {
     this.connection = connection;
   }
 
-  public DocumentsAPI setJobLogger(JobLogger jobLogger) {
+  public VAPI setJobLogger(JobLogger jobLogger) {
     //replace the default Logger with a new Logger that will include job logs
     this.logger = new Logger(jobLogger);
     return this;
@@ -56,7 +75,40 @@ public class DocumentsAPI {
   }
 
   /**
-   * Execute a User Action (workflow or state change).
+   * Initiate workflow actions on one or more workflows - cancel tasks.
+   * Return the initiated Job ID as type 'long'.
+   * @param taskIds - List<String> - list of one or more taskIds
+   * @return long - initiated Job ID
+   */
+  public BigDecimal cancelWorkflowTasks(List<String> taskIds) {
+
+    HttpCallout httpCallout = new HttpCallout(this.connection);
+    List<HttpParam> params = VaultCollections.newList();
+    HttpResult httpResult;
+
+    this.succeeded = true;
+
+    String path = "/api/"+APIVersion+"/object/workflow/actions/canceltasks";
+
+    params.add(new HttpParam("task_ids", Util.stringifyList(taskIds, "")));
+
+    httpResult = httpCallout.requestJson(HttpMethod.POST, path.toString(), params, this.logger);
+
+    if (httpResult.isError()) {
+      this.succeeded = false;
+      this.errorType = httpResult.getErrorType();
+      this.errorMessage = httpResult.getErrorMessage();
+      return null;
+    }
+
+    return httpResult
+            .getJsonObject()
+            .getValue("data", JsonValueType.OBJECT)
+            .getValue("job_id", JsonValueType.NUMBER);
+  }
+
+  /**
+   * Execute a Document Lifecycle User Action (workflow or state change).
    *
    * @param docVersionId of the document
    * @param actionLabel  label of the action as it appears on the actions menu in the UI
@@ -79,7 +131,7 @@ public class DocumentsAPI {
       .append(docVersionIdParts.minor)
       .append("/lifecycle_actions");
 
-    HttpCallout httpCallout = new HttpCallout(connection);
+    HttpCallout httpCallout = new HttpCallout(this.connection);
 
     httpResult = httpCallout.requestJson(HttpMethod.GET, path.toString(), this.logger);
 
@@ -124,6 +176,35 @@ public class DocumentsAPI {
   public void executeUserAction(String docVersionId, String actionLabel) {
     List<HttpParam> emptyParamsList = VaultCollections.newList();
     this.executeUserAction(docVersionId, actionLabel, emptyParamsList);
+  }
+
+  /**
+   * Execute a Vault API query.
+   *
+   * @param query - String - the query
+   */
+  public JsonArray executeQuery(String query) {
+
+    HttpCallout httpCallout = new HttpCallout(this.connection);
+    List<HttpParam> params = VaultCollections.newList();
+    HttpResult httpResult;
+
+    this.succeeded = true;
+
+    String path = "/api/"+APIVersion+"/query";
+
+    params.add(new HttpParam("q", query));
+
+    httpResult = httpCallout.requestJson(HttpMethod.POST, path.toString(), params, this.logger);
+
+    if (httpResult.isError()) {
+      this.succeeded = false;
+      this.errorType = httpResult.getErrorType();
+      this.errorMessage = httpResult.getErrorMessage();
+      return null;
+    }
+
+    return httpResult.getJsonObject().getValue("data", JsonValueType.ARRAY);
   }
 
 }
