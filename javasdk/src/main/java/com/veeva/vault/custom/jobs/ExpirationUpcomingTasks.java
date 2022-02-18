@@ -34,10 +34,8 @@ public class ExpirationUpcomingTasks implements Job {
     // Expiration date threshold values for selecting materials for which to start "Expiration Pending" workflows...
     private static final long PENDING_RANGE_HIGH = 60;
     private static final long PENDING_RANGE_LOW = 55;
-    // the number of days before a Job's Expiration Date that the pending expiration task should be cancelled...
-    private static final long TASK_KILL_THRESHOLD_DAYS = 15;
-    // for finding selecting materials whose expiration date is before the current date plus this number of days...
-    private static final long PENDING_EXPIRATION_THRESHOLD_DAYS = 15;
+    // for selecting materials whose expiration date is on/before the current date plus this number of days...
+    private static final long PENDING_EXPIRATION_THRESHOLD_DAYS = 1;
 
     private static final String ACTION = "action";
     private static final String ACTION_START = "start";
@@ -165,8 +163,8 @@ public class ExpirationUpcomingTasks implements Job {
       JobLogger logger = jobInitContext.getJobLogger();
 
       logger.log(
-        "Looking for active Expiration Pending workflows for Materials with expiration date less than " +
-          PENDING_EXPIRATION_THRESHOLD_DAYS + " in the future..."
+        "Looking for active Expiration Pending workflows for Materials with expiration date less than or equal to " +
+          PENDING_EXPIRATION_THRESHOLD_DAYS + " day(s) in the future..."
       );
 
       QueryService queryService = ServiceLocator.locate(QueryService.class);
@@ -176,7 +174,7 @@ public class ExpirationUpcomingTasks implements Job {
       queryResponse = queryService.query(
         "select id from documents" +
         " where toName(lifecycle__v) = 'job_processing__c'" +
-        "   and expiration_date__c < '"+expirationThresholdDate.toString()+"'"
+        "   and expiration_date__c <= '"+expirationThresholdDate.toString()+"'"
       );
       iter = queryResponse.streamResults().iterator();
 
@@ -228,8 +226,6 @@ public class ExpirationUpcomingTasks implements Job {
       String docVersionId = jobItem.getValue("docVersionId", JobValueType.STRING);
       LocalDate expirationDate = jobItem.getValue("expirationDate", JobValueType.DATE);
 
-      LocalDate taskKillDate = expirationDate.minusDays(TASK_KILL_THRESHOLD_DAYS);
-
       logger.log("Starting 'Expiration Pending' workflow for: " + docNumber);
 
       List<String> userIds = Util.getDocumentUsersInRole(docVersionId, "project_manager__c");
@@ -240,8 +236,6 @@ public class ExpirationUpcomingTasks implements Job {
         logger.log(docNumber + ": Found user in role Project Manager: " + userId);
         workflowStartCriteria.add(new HttpParam("user_control_multiple__c", "user:" + userId));
       }
-
-      workflowStartCriteria.add(new HttpParam("date_control1__c", taskKillDate.toString()));
 
       logger.log("Executing 'Expiration Pending' workflow for " + docNumber);
       VAPI vapi = new VAPI("local_connection__c");
