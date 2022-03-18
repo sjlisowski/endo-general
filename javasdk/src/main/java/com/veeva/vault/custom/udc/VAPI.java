@@ -90,7 +90,7 @@ public class VAPI {
 
     String path = "/api/"+APIVersion+"/object/workflow/actions/canceltasks";
 
-    params.add(new HttpParam("task_ids", Util.stringifyList(taskIds, "")));
+    params.add(new HttpParam("task_ids", Util.stringifyList(taskIds, ",")));
 
     httpResult = httpCallout.requestJson(HttpMethod.POST, path.toString(), params, this.logger);
 

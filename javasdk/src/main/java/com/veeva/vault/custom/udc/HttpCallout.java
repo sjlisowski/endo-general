@@ -53,12 +53,15 @@ public class HttpCallout {
       request = httpService.newHttpRequest(this.connectionName);
     }
 
+    logger.info("HttpCallout: Executing '" + method + "' on: " + path);
+
     request
       .setMethod(method)
       .appendPath(path);
 
     if (params != null) {
       for (HttpParam param : params) {
+        logger.info(param.name + ": " + param.value);
         request.setBodyParam(param.name, param.value);
       }
     }
@@ -87,7 +90,7 @@ public class HttpCallout {
               String type = errors.getValue(0, JsonValueType.OBJECT).getValue("type", JsonValueType.STRING);
               String message = errors.getValue(0, JsonValueType.OBJECT).getValue("message", JsonValueType.STRING);
               logger.error("ERROR "+type+": " + message);
-              httpResult.setError(ErrorType.OPERATION_FAILED, message);
+              httpResult.setError(type, message);
             }
           }
         }

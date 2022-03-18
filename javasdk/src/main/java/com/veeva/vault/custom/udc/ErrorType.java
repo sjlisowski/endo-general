@@ -12,4 +12,6 @@ public class ErrorType {
     public static final String UPDATE_DENIED = "UPDATE_DENIED";
     public static final String INVALID_DOCUMENT = "INVALID_DOCUMENT";
     public static final String DUPLICATE_DOCUMENT = "DUPLICATE_DOCUMENT";
+    public static final String OPERATION_DENIED = "OPERATION_DENIED";
+    public static final String DELETION_DENIED = "DELETION_DENIED";
 }

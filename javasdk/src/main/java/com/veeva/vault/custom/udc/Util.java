@@ -1,16 +1,12 @@
 package com.veeva.vault.custom.udc;
 
-import com.veeva.vault.sdk.api.core.ServiceLocator;
-import com.veeva.vault.sdk.api.core.UserDefinedClassInfo;
-import com.veeva.vault.sdk.api.core.ValueType;
-import com.veeva.vault.sdk.api.core.VaultCollections;
+import com.veeva.vault.sdk.api.core.*;
 import com.veeva.vault.sdk.api.data.Record;
 import com.veeva.vault.sdk.api.document.DocumentService;
 import com.veeva.vault.sdk.api.document.DocumentVersion;
 import com.veeva.vault.sdk.api.json.JsonData;
 import com.veeva.vault.sdk.api.json.JsonObject;
 import com.veeva.vault.sdk.api.json.JsonService;
-import com.veeva.vault.sdk.api.json.JsonValueType;
 import com.veeva.vault.sdk.api.query.QueryResponse;
 import com.veeva.vault.sdk.api.query.QueryResult;
 import com.veeva.vault.sdk.api.query.QueryService;
@@ -38,6 +34,7 @@ import java.util.Set;
   stringifyFieldValues - Concatenates a field value across one or more records in a query response.
   difference - Return a list of Strings from list1/set1 that are not also in list2/set2.
   getVaultDomain - Get the Domain Name part of the Vault's URL
+  getParameters - retrieve the application's parameters JSON from a record in object "VPROC Parameter Sets"
  */
 
 @UserDefinedClassInfo
@@ -305,14 +302,21 @@ public class Util {
      * @return - String.
      */
     public static String getVaultDomain() {
-      return getPmfParameters().getValue("vaultDomain", JsonValueType.STRING);
+      VaultInformationService vaultInformationService = ServiceLocator.locate(VaultInformationService.class);
+      VaultInformation vaultInformation = vaultInformationService.getLocalVaultInformation();
+      return vaultInformation.getDns();
     }
 
-    private static JsonObject getPmfParameters() {
+    /**
+     * retrieve the application's parameters JSON from a record in object "VPROC Parameter Set"
+     * @param appName String - name of application in the name__v column of the "VPROC Parameter Set" record.
+     * @return
+     */
+    public static JsonObject getParameters(String appName) {
       JsonService jsonSerice = ServiceLocator.locate(JsonService.class);
       QueryService queryService = ServiceLocator.locate(QueryService.class);
       QueryResponse queryResponse = queryService.query(
-        "select parameters__c from vproc_parameter_set__c where name__v = 'pmf'"
+        "select parameters__c from vproc_parameter_set__c where name__v = '"+appName+"'"
       );
       QueryResult queryResult = queryResponse.streamResults().iterator().next();
       JsonData jsonData = jsonSerice.readJson(queryResult.getValue("parameters__c", ValueType.STRING));
