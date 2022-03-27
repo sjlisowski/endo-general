@@ -1,0 +1,12 @@
+name__v,description__c,parameters__c
+ExpirationPendingWorkflow,"DO NOT DELETE THIS INFORMATION.
+
+These parameters are used by Job Processor com.veeva.vault.custom.jobs.ExpirationUpcomingTasks.
+
+- workflowStartDays:  the number of days before a Job's Expiration Date on which the Expiration Pending worklfow will be executed
+- taskDueDays: the number of days before a Job's Expiration Date on which the Expiration Pending workflow task will be due
+- workflowKillDays: the number of days before a Job's Expiration Date on which an active Expiration Pending workflow will be canceled","{
+   ""workflowStartDays"": 60,
+   ""taskDueDays"": 40,
+   ""workflowKillDays"": 1
+}"

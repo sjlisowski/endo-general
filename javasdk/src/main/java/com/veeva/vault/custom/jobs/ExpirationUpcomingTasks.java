@@ -32,7 +32,7 @@ import java.util.List;
 public class ExpirationUpcomingTasks implements Job {
 
     // number of days  before the WORKFLOW_START_DAYS to create a range of dates to find jobs approaching expiration
-    private static final long WORKFLOW_START_BUFFER_DAYS = 5;
+    private static final long WORKFLOW_START_BUFFER_DAYS = 30;
 
     private static final String ACTION = "action";
     private static final String ACTION_START = "start";
