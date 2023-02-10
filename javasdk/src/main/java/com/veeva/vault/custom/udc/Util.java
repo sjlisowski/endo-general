@@ -2,14 +2,13 @@ package com.veeva.vault.custom.udc;
 
 import com.veeva.vault.sdk.api.core.*;
 import com.veeva.vault.sdk.api.data.Record;
+import com.veeva.vault.sdk.api.data.RecordService;
 import com.veeva.vault.sdk.api.document.DocumentService;
 import com.veeva.vault.sdk.api.document.DocumentVersion;
 import com.veeva.vault.sdk.api.json.JsonData;
 import com.veeva.vault.sdk.api.json.JsonObject;
 import com.veeva.vault.sdk.api.json.JsonService;
-import com.veeva.vault.sdk.api.query.QueryResponse;
-import com.veeva.vault.sdk.api.query.QueryResult;
-import com.veeva.vault.sdk.api.query.QueryService;
+import com.veeva.vault.sdk.api.query.*;
 import com.veeva.vault.sdk.api.role.DocumentRole;
 import com.veeva.vault.sdk.api.role.DocumentRoleService;
 import com.veeva.vault.sdk.api.role.GetDocumentRolesResponse;
@@ -35,6 +34,8 @@ import java.util.Set;
   difference - Return a list of Strings from list1/set1 that are not also in list2/set2.
   getVaultDomain - Get the Domain Name part of the Vault's URL
   getParameters - retrieve the application's parameters JSON from a record in object "VPROC Parameter Sets"
+  saveRecords - executes batchsaverecords
+  docVersionId.  Return a string containing the document version id, e.g. "101_1_5"
  */
 
 @UserDefinedClassInfo
@@ -313,14 +314,93 @@ public class Util {
      * @return
      */
     public static JsonObject getParameters(String appName) {
-      JsonService jsonSerice = ServiceLocator.locate(JsonService.class);
+      JsonService jsonService = ServiceLocator.locate(JsonService.class);
       QueryService queryService = ServiceLocator.locate(QueryService.class);
-      QueryResponse queryResponse = queryService.query(
-        "select parameters__c from vproc_parameter_set__c where name__v = '"+appName+"'"
-      );
-      QueryResult queryResult = queryResponse.streamResults().iterator().next();
-      JsonData jsonData = jsonSerice.readJson(queryResult.getValue("parameters__c", ValueType.STRING));
-      return jsonData.getJsonObject();
+
+      JsonData[] jsonData = {null};
+      QueryExecutionRequest qeRequest = queryService.newQueryExecutionRequestBuilder()
+        .withQueryString("select parameters__c from vproc_parameter_set__c where name__v = '"+appName+"'")
+        .build();
+      queryService.query(qeRequest)
+        .onSuccess(response -> {
+           QueryExecutionResult result = response.streamResults().findFirst().get();
+           jsonData[0] = jsonService.readJson(result.getValue("parameters__c", ValueType.STRING));
+        })
+        .onError(error -> {
+           throw new RollbackException(ErrorType.OPERATION_FAILED, error.getMessage());
+        })
+        .execute();
+
+      return jsonData[0].getJsonObject();
     }
+
+    /**
+     * saveRecords.
+     * @param records
+     */
+    public static void saveRecords(List<Record> records) {
+      RecordService recordService = ServiceLocator.locate(RecordService.class);
+      recordService.batchSaveRecords(records)
+        .onErrors(batchOperationErrors ->{
+          batchOperationErrors.stream().findFirst().ifPresent(error -> {
+            String errMsg = error.getError().getMessage();
+            throw new RollbackException("OPERATION_NOT_ALLOWED", "An error occurred trying to save records: " + errMsg);
+          });
+        })
+        .execute();
+    }
+
+    /**
+     * docVersionId.  Return a string containing the document version id, e.g. "101_1_5"
+     * @param documentVersion
+     * @return
+     */
+    public static String docVersionId(DocumentVersion documentVersion) {
+      return documentVersion.getValue("id", ValueType.STRING) + "_" +
+        documentVersion.getValue("major_version_number__v", ValueType.NUMBER).toString() + "_" +
+        documentVersion.getValue("minor_version_number__v", ValueType.NUMBER).toString();
+    }
+
+    //  TEMPORARY UNTIL INCLUSION OF QueryUtil ...
+
+  /**
+   * Execute a query, and return the resulting QueryExecutionResponse object.
+   * @param query -- String.  The vql query string.
+   * @return  -- and instance of QueryExecutionResponse
+   */
+  public static QueryExecutionResponse query(String query) {
+
+    QueryService queryService = ServiceLocator.locate(QueryService.class);
+
+    QueryExecutionResponse[] queryResponse = {null};
+
+    QueryExecutionRequest qeRequest = queryService.newQueryExecutionRequestBuilder()
+      .withQueryString(query)
+      .build();
+    queryService.query(qeRequest)
+      .onSuccess(response -> {
+        queryResponse[0] = response;
+      })
+      .onError(error -> {
+        throw new RollbackException(ErrorType.OPERATION_FAILED, error.getMessage());
+      })
+      .execute();
+
+    return queryResponse[0];
+  }
+
+  /**
+   * queryOne.  Return a single QueryExecutionResult, or null if the query returns no result.
+   * @param query
+   * @return
+   */
+  public static QueryExecutionResult queryOne(String query) {
+    QueryExecutionResult queryExecutionResult = null;
+    QueryExecutionResponse queryExecutionResponse = Util.query(query);
+    if (queryExecutionResponse.getResultCount() > 0) {
+      queryExecutionResult = queryExecutionResponse.streamResults().findFirst().get();
+    }
+    return queryExecutionResult;
+  }
 
 }
