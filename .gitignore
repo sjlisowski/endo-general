@@ -4,3 +4,4 @@ deployment/javasdk
 deployment/*.zip
 deployment/*.vpk
 target
+_archive
