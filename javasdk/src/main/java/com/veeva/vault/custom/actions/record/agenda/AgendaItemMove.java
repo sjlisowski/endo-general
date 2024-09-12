@@ -59,7 +59,17 @@ public class AgendaItemMove implements RecordAction {
         List<String> agendaIds = result.getValue("agenda__c", ValueType.REFERENCES);
         String docVersionId = result.getValue("version_id", ValueType.STRING);
 
-        agendaIds.set(agendaIds.indexOf(oldAgendaId), newAgendaId);
+        if (agendaIds.size() > 1) {
+          // field document.agenda__c might be multi-pick...
+          if (!agendaIds.contains(oldAgendaId)) {
+            throw new RollbackException(
+              ErrorType.OPERATION_DENIED,
+              "The Agenda field on this document does not contain this agenda.");
+          }
+          agendaIds.set(agendaIds.indexOf(oldAgendaId), newAgendaId);
+        } else {
+          agendaIds.set(0, newAgendaId);
+        }
 
         DocumentService documentService = ServiceLocator.locate(DocumentService.class);
         DocumentVersion documentVersion = documentService.newVersionWithId(docVersionId);
@@ -80,10 +90,8 @@ public class AgendaItemMove implements RecordAction {
       recordToSave.setValue("document_unbound__c", docId);
       recordToSave.setValue("topic__c", thisRecord.getValue("topic__c", ValueType.STRING));
       recordToSave.setValue("duration__c", thisRecord.getValue("duration__c", ValueType.NUMBER));
-      recordToSave.setValue("project_owner__c", thisRecord.getValue("project_owner__c", ValueType.STRING));
-      recordToSave.setValue("document_owner__c", thisRecord.getValue("document_owner__c", ValueType.STRING));
       recordToSave.setValue("notes__c", thisRecord.getValue("notes__c", ValueType.STRING));
-      Util.saveRecord(recordToSave);
+      Util.saveRecord(recordToSave); // note: document info is captured by the BEFORE trigger
 
       String recordId;
 
