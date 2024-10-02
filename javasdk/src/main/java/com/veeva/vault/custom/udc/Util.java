@@ -2,6 +2,8 @@ package com.veeva.vault.custom.udc;
 
 import com.veeva.vault.sdk.api.core.*;
 import com.veeva.vault.sdk.api.data.Record;
+import com.veeva.vault.sdk.api.data.RecordBatchDeleteRequest;
+import com.veeva.vault.sdk.api.data.RecordBatchSaveRequest;
 import com.veeva.vault.sdk.api.data.RecordService;
 import com.veeva.vault.sdk.api.document.DocumentService;
 import com.veeva.vault.sdk.api.document.DocumentVersion;
@@ -13,8 +15,10 @@ import com.veeva.vault.sdk.api.role.DocumentRole;
 import com.veeva.vault.sdk.api.role.DocumentRoleService;
 import com.veeva.vault.sdk.api.role.GetDocumentRolesResponse;
 
+import java.math.BigDecimal;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /*
@@ -36,6 +40,10 @@ import java.util.Set;
   getParameters - retrieve the application's parameters JSON from a record in object "VPROC Parameter Sets"
   saveRecords - executes batchsaverecords
   docVersionId.  Return a string containing the document version id, e.g. "101_1_5"
+  batchDeleteRecords - delete a list of records
+  deleteRecord - delete a single Record
+  getUserInDocumentRole - return the UserId of the user in the specified document role for the specified document
+
  */
 
 @UserDefinedClassInfo
@@ -338,19 +346,67 @@ public class Util {
      * saveRecords.
      * @param records
      */
-    public static void saveRecords(List<Record> records) {
+    public static void batchSaveRecords(List<Record> records) {
       RecordService recordService = ServiceLocator.locate(RecordService.class);
-      recordService.batchSaveRecords(records)
+      RecordBatchSaveRequest saveRequest = recordService
+        .newRecordBatchSaveRequestBuilder()
+        .withRecords(records)
+        .build();
+      recordService.batchSaveRecords(saveRequest)
         .onErrors(batchOperationErrors ->{
           batchOperationErrors.stream().findFirst().ifPresent(error -> {
             String errMsg = error.getError().getMessage();
-            throw new RollbackException("OPERATION_NOT_ALLOWED", "An error occurred trying to save records: " + errMsg);
+            int errPosition = error.getInputPosition();
+            String name = records.get(errPosition).getValue("name__v", ValueType.STRING);
+            throw new RollbackException(ErrorType.OPERATION_FAILED, "Unable to create: " + name +
+              "because of " + errMsg);
           });
         })
         .execute();
+
     }
 
-    /**
+  /**
+   * Save a single Record.
+   * @param record
+   */
+  public static void saveRecord(Record record) {
+    batchSaveRecords(VaultCollections.asList(record));
+  }
+
+  /**
+   *
+   * @param records
+   */
+  public static void batchDeleteRecords(List<Record> records) {
+    RecordService recordService = ServiceLocator.locate(RecordService.class);
+    RecordBatchDeleteRequest deleteRequest = recordService
+      .newRecordBatchDeleteRequestBuilder()
+      .withRecords(records)
+      .build();
+    recordService.batchDeleteRecords(deleteRequest)
+      .onErrors(batchOperationErrors -> {
+        batchOperationErrors.stream().findFirst().ifPresent(error -> {
+          String errMsg = error.getError().getMessage();
+          throw new RollbackException(
+            ErrorType.OPERATION_FAILED,
+            "An error occurred deleting one or more records: " + errMsg
+          );
+        });
+      })
+      .execute();
+  }
+
+  /**
+   * Delete a single Record.
+   * @param record
+   */
+  public static void deleteRecord(Record record) {
+    batchDeleteRecords(VaultCollections.asList(record));
+  }
+
+
+  /**
      * docVersionId.  Return a string containing the document version id, e.g. "101_1_5"
      * @param documentVersion
      * @return
@@ -361,46 +417,62 @@ public class Util {
         documentVersion.getValue("minor_version_number__v", ValueType.NUMBER).toString();
     }
 
-    //  TEMPORARY UNTIL INCLUSION OF QueryUtil ...
-
   /**
-   * Execute a query, and return the resulting QueryExecutionResponse object.
-   * @param query -- String.  The vql query string.
-   * @return  -- and instance of QueryExecutionResponse
+   * Return the UserId of the user in the specified document role for the specified document.
+   *   Return null if there is no user in the specified role.
+   *
+   * @param docId - BigDecimal or int -  the document's document Id
+   * @param roleName - String - name of the role
+   * @return  UserId or null
    */
-  public static QueryExecutionResponse query(String query) {
+  public static String getUserInDocumentRole(BigDecimal docId, String roleName) {
+    return getUserInDocumentRole(docId.intValue(), roleName);
+  }
+  public static String getUserInDocumentRole(int intDocId, String roleName) {
 
-    QueryService queryService = ServiceLocator.locate(QueryService.class);
+    QueryExecutionResult queryResult = QueryUtil.queryOne(
+      "select user__sys " +
+        "from doc_role__sys " +
+        "where document_id = " + intDocId +
+        " and role_name__sys = '"+roleName+"'"
+    );
+    if (queryResult == null) {
+      return null;
+    } else {
+      return queryResult.getValue("user__sys", ValueType.STRING);
+    }
 
-    QueryExecutionResponse[] queryResponse = {null};
-
-    QueryExecutionRequest qeRequest = queryService.newQueryExecutionRequestBuilder()
-      .withQueryString(query)
-      .build();
-    queryService.query(qeRequest)
-      .onSuccess(response -> {
-        queryResponse[0] = response;
-      })
-      .onError(error -> {
-        throw new RollbackException(ErrorType.OPERATION_FAILED, error.getMessage());
-      })
-      .execute();
-
-    return queryResponse[0];
   }
 
   /**
-   * queryOne.  Return a single QueryExecutionResult, or null if the query returns no result.
-   * @param query
+   * getUsersInDocumentRoles
+   *
+   * Return a Map of User Ids keyed by role name for a given list or Roles for a given Document.
+   *
+   * @param docId - BigDecimal.  The document's id
+   * @param roleNames - List<String>. List of role names.
    * @return
    */
-  public static QueryExecutionResult queryOne(String query) {
-    QueryExecutionResult queryExecutionResult = null;
-    QueryExecutionResponse queryExecutionResponse = Util.query(query);
-    if (queryExecutionResponse.getResultCount() > 0) {
-      queryExecutionResult = queryExecutionResponse.streamResults().findFirst().get();
+  public static Map<String, String> getUsersInDocumentRoles(int docId, List<String> roleNames) {
+
+    Map<String, String> usersInRoles = VaultCollections.newMap();
+
+    Iterator<QueryExecutionResult> iter = QueryUtil.query(
+      "SELECT role_name__sys, user__sys" +
+      "  FROM doc_role__sys" +
+      " WHERE document_id = " + docId +
+      "   AND role_name__sys contains " + vqlContains(roleNames)
+    ).streamResults().iterator();
+
+    while (iter.hasNext()) {
+      QueryExecutionResult result = iter.next();
+      usersInRoles.put(
+        result.getValue("role_name__sys", ValueType.STRING),
+        result.getValue("user__sys", ValueType.STRING)
+      );
     }
-    return queryExecutionResult;
+
+    return usersInRoles;
   }
 
 }
