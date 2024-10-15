@@ -181,8 +181,10 @@ public class ExpirationUpcomingTasks implements Job {
       LocalDate workflowKillDate = LocalDate.now().plusDays(workflowKillDays);
 
       queryResponse = queryService.query(
-        "select id from documents" +
+        "select id, document_number__v, expiration_date__c" +
+        "  from documents" +
         " where toName(lifecycle__v) = 'job_processing__c'" +
+        "   and toName(status__v) = 'approved_for_distribution__c'" +
         "   and expiration_date__c <= '"+workflowKillDate.toString()+"'"
       );
       iter = queryResponse.streamResults().iterator();
@@ -191,6 +193,9 @@ public class ExpirationUpcomingTasks implements Job {
 
       while (iter.hasNext()) {
         QueryResult queryResult = iter.next();
+        String docNbr = queryResult.getValue("document_number__v", ValueType.STRING);
+        LocalDate expirationDate = queryResult.getValue("expiration_date__c", ValueType.DATE);
+        logger.log("Found " + docNbr + " with expiration date " + expirationDate.toString());
         docIds.add(queryResult.getValue("id", ValueType.STRING));
       }
 

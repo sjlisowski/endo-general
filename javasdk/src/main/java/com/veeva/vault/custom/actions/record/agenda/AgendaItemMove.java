@@ -18,6 +18,7 @@ import com.veeva.vault.sdk.api.job.JobService;
 import com.veeva.vault.sdk.api.query.QueryExecutionResult;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -53,11 +54,11 @@ public class AgendaItemMove implements RecordAction {
       // Update the Document's agenda__c field ...
       /////////////////////////////////////////////////////////////
       if (docId != null) {
-        QueryExecutionResult result = QueryUtil.queryOne(
+        QueryExecutionResult qeResult = QueryUtil.queryOne(
           "select agenda__c, version_id from documents where id = " + docId
         );
-        List<String> agendaIds = result.getValue("agenda__c", ValueType.REFERENCES);
-        String docVersionId = result.getValue("version_id", ValueType.STRING);
+        List<String> agendaIds = qeResult.getValue("agenda__c", ValueType.REFERENCES);
+        String docVersionId = qeResult.getValue("version_id", ValueType.STRING);
 
         if (agendaIds.size() > 1) {
           // field document.agenda__c might be multi-pick...
@@ -71,9 +72,14 @@ public class AgendaItemMove implements RecordAction {
           agendaIds.set(0, newAgendaId);
         }
 
+        LocalDate newMeetingDate = QueryUtil.queryOne(
+          "select meeting_date__c from agenda__c where id = '"+newAgendaId+"'"
+        ).getValue("meeting_date__c", ValueType.DATE);
+
         DocumentService documentService = ServiceLocator.locate(DocumentService.class);
         DocumentVersion documentVersion = documentService.newVersionWithId(docVersionId);
         documentVersion.setValue("agenda__c", agendaIds);
+        documentVersion.setValue("meeting_review_date__c", newMeetingDate);
         documentService.saveDocumentVersions(VaultCollections.asList(documentVersion));
       }
 
