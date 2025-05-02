@@ -24,12 +24,12 @@ import java.util.Map;
 @UserDefinedClassInfo
 public class AgendaApp {
 
-    public static final String AGENDA_ID = "AgendaId";
-    public static final String AGENDA_NAME = "AgendaName";
-    public static final String AGENDA_MEETNG_TIME = "AgendaMeetingTime";
-    public static final String AGENDA_ITEM_SEMAPHORE = "semaphore";
-    
-    public static String getAgendaMeetingTime(String agendaId) {
+  public static final String AGENDA_ID = "AgendaId";
+  public static final String AGENDA_NAME = "AgendaName";
+  public static final String AGENDA_MEETNG_TIME = "AgendaMeetingTime";
+  public static final String AGENDA_ITEM_SEMAPHORE = "semaphore";
+
+  public static String getAgendaMeetingTime(String agendaId) {
       return QueryUtil.queryOne(
         "select meeting_time__c from agenda__c where id = '"+agendaId+"'"
       ).getValue("meeting_time__c", ValueType.STRING);
@@ -111,33 +111,81 @@ public class AgendaApp {
     roleNames.add("regulatory__c");
     roleNames.add("compliance__c");
     roleNames.add("reviewer__c");
-    Map<String, String> usersInRoles = Util.getUsersInDocumentRoles(intDocId, roleNames);
+    Map<String, List<String>> roleUsersMap = Util.getUsersInDocumentRoles(intDocId, roleNames);
+    List<String> usersInRole;  // list of user ID's
 
-//    String projectOwner = Util.getUserInDocumentRole(intDocId, "project_manager__c");
-    String projectOwner = usersInRoles.get("project_manager__c");
-//    String documentOwner =  Util.getUserInDocumentRole(intDocId, "owner__v");
-    String documentOwner = usersInRoles.get("owner__c");
+    usersInRole = roleUsersMap.get("project_manager__c");
+    String projectOwner = usersInRole == null ? null : usersInRole.get(0);
+
+    usersInRole = roleUsersMap.get("owner__c");
+    String documentOwner = usersInRole.get(0);  // owner role is always occupied
     if (projectOwner == null || !documentOwner.equals(projectOwner)) {
       record.setValue("document_owner__c", documentOwner);
     }
-    record.setValue("project_owner__c", projectOwner);
-    record.setValue("medical__c", usersInRoles.get("medical__c"));
-    record.setValue("legal__c", usersInRoles.get("legal__c"));
-    record.setValue("regulatory__c", usersInRoles.get("regulatory__c"));
-    record.setValue("compliance__c", usersInRoles.get("compliance__c"));
-    record.setValue("reviewer__c", usersInRoles.get("reviewer__c"));
+
+    record.setValue("project_owner__c", projectOwner);  // this is a User Object Reference field
+
+    // the remaining user fields are Text fields ...
+
+    VaultUsers vaultUsers = new VaultUsers();
+    List<String> userNamesInRole = VaultCollections.newList();
+
+    usersInRole = roleUsersMap.get("medical__c");
+    if (usersInRole != null) {
+      userNamesInRole.clear();
+      for (String userId: usersInRole) {
+        userNamesInRole.add(vaultUsers.getUserName(userId));
+      }
+      record.setValue("medical1__c", Util.stringifyList(userNamesInRole));
+    }
+
+    usersInRole = roleUsersMap.get("legal__c");
+    if (usersInRole != null) {
+      userNamesInRole.clear();
+      for (String userId: usersInRole) {
+        userNamesInRole.add(vaultUsers.getUserName(userId));
+      }
+      record.setValue("legal1__c", Util.stringifyList(userNamesInRole));
+    }
+
+    usersInRole = roleUsersMap.get("regulatory__c");
+    if (usersInRole != null) {
+      userNamesInRole.clear();
+      for (String userId: usersInRole) {
+        userNamesInRole.add(vaultUsers.getUserName(userId));
+      }
+      record.setValue("regulatory1__c", Util.stringifyList(userNamesInRole));
+    }
+
+    usersInRole = roleUsersMap.get("compliance__c");
+    if (usersInRole != null) {
+      userNamesInRole.clear();
+      for (String userId: usersInRole) {
+        userNamesInRole.add(vaultUsers.getUserName(userId));
+      }
+      record.setValue("compliance1__c", Util.stringifyList(userNamesInRole));
+    }
+
+    usersInRole = roleUsersMap.get("reviewer__c");
+    if (usersInRole != null) {
+      userNamesInRole.clear();
+      for (String userId: usersInRole) {
+        userNamesInRole.add(vaultUsers.getUserName(userId));
+      }
+      record.setValue("reviewer1__c", Util.stringifyList(userNamesInRole));
+    }
 
   }
 
-    /**
-     * updateDocumentMeetingDate
-     *
-     * Update the 'Meeting Date' field (meeting_review_date__c) on the documents identified
-     * by the list of document Ids.
-     *
-     * @param meetingDate - LocalDate.  The meeting date.
-     * @param docIds  - List<String>.  The list of docIds.
-     */
+  /**
+   * updateDocumentMeetingDate
+   *
+   * Update the 'Meeting Date' field (meeting_review_date__c) on the documents identified
+   * by the list of document Ids.
+   *
+   * @param meetingDate - LocalDate.  The meeting date.
+   * @param docIds  - List<String>.  The list of docIds.
+   */
     public static void updateDocumentMeetingDate(LocalDate meetingDate, List<String> docIds) {
 
       DocumentService documentService = ServiceLocator.locate(DocumentService.class);

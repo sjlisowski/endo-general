@@ -73,13 +73,18 @@ public class Util {
   }
 
   /**
-   * Return a comma-delimited string build from a list of strings.
+   * Return a comma-delimited string build from a list of strings, or null if the incoming list
+   * is null.
    * @param list - List<String>.  the list
    * @param separator - String. Optional.  What should separate the individual items
    *                  in the resulting string.  Default value is ", ".
    * @return String
    */
   public static String stringifyList(List<String> list, String separator) {
+
+    if (list == null) {
+      return null;
+    }
 
     StringBuilder sb = new StringBuilder();
 
@@ -453,9 +458,9 @@ public class Util {
    * @param roleNames - List<String>. List of role names.
    * @return
    */
-  public static Map<String, String> getUsersInDocumentRoles(int docId, List<String> roleNames) {
+  public static Map<String, List<String>> getUsersInDocumentRoles(int docId, List<String> roleNames) {
 
-    Map<String, String> usersInRoles = VaultCollections.newMap();
+    Map<String, List<String>> roleUsersMap = VaultCollections.newMap();
 
     Iterator<QueryExecutionResult> iter = QueryUtil.query(
       "SELECT role_name__sys, user__sys" +
@@ -466,13 +471,18 @@ public class Util {
 
     while (iter.hasNext()) {
       QueryExecutionResult result = iter.next();
-      usersInRoles.put(
-        result.getValue("role_name__sys", ValueType.STRING),
-        result.getValue("user__sys", ValueType.STRING)
-      );
+      String roleName = result.getValue("role_name__sys", ValueType.STRING);
+      String userId = result.getValue("user__sys", ValueType.STRING);
+      List<String> roleUsers = roleUsersMap.get(roleName);
+      if (roleUsers == null) {
+        roleUsers = VaultCollections.asList(userId);
+        roleUsersMap.put(roleName, roleUsers);
+      } else {
+        roleUsers.add(userId);
+      }
     }
 
-    return usersInRoles;
+    return roleUsersMap;
   }
 
 }
