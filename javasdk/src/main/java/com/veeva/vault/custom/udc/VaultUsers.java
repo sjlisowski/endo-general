@@ -6,6 +6,7 @@ import com.veeva.vault.sdk.api.core.VaultCollections;
 import com.veeva.vault.sdk.api.query.QueryExecutionResult;
 
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -40,5 +41,11 @@ public class VaultUsers {
         String firstName = userData.getValue("first_name__sys", ValueType.STRING);
         String lastName = userData.getValue("last_name__sys", ValueType.STRING);
         return firstName + " " + lastName;
+    }
+
+    public Boolean isUserActive(String userId) {
+      QueryExecutionResult userData = usersMap.get(userId);
+      List<String> status = userData.getValue("status__v", ValueType.PICKLIST_VALUES);
+      return status.get(0).equals("active__v");
     }
 }

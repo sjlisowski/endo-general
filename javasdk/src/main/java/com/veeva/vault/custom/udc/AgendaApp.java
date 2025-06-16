@@ -114,20 +114,33 @@ public class AgendaApp {
     Map<String, List<String>> roleUsersMap = Util.getUsersInDocumentRoles(intDocId, roleNames);
     List<String> usersInRole;  // list of user ID's
 
+    VaultUsers vaultUsers = new VaultUsers();
+
+    // set the Owner and Project Manager fields.  These are a User Object Reference fields...
+
+    String projectOwner = null;
     usersInRole = roleUsersMap.get("project_manager__c");
-    String projectOwner = usersInRole == null ? null : usersInRole.get(0);
+    if (usersInRole != null) {
+      for (String userId: usersInRole) {
+        if (vaultUsers.isUserActive(userId)) {
+          projectOwner = userId;
+          break;
+        }
+      }
+    }
+    record.setValue("project_owner__c", projectOwner);
 
     usersInRole = roleUsersMap.get("owner__c");
     String documentOwner = usersInRole.get(0);  // owner role is always occupied
     if (projectOwner == null || !documentOwner.equals(projectOwner)) {
-      record.setValue("document_owner__c", documentOwner);
+      if (vaultUsers.isUserActive(documentOwner)) {
+        record.setValue("document_owner__c", documentOwner);
+      }
     }
 
-    record.setValue("project_owner__c", projectOwner);  // this is a User Object Reference field
 
     // the remaining user fields are Text fields ...
 
-    VaultUsers vaultUsers = new VaultUsers();
     List<String> userNamesInRole = VaultCollections.newList();
 
     usersInRole = roleUsersMap.get("medical__c");
