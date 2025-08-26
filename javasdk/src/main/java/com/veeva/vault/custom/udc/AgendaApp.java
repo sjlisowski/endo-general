@@ -83,6 +83,7 @@ public class AgendaApp {
 
     QueryExecutionResult queryResult = QueryUtil.queryOne(
       "select document_number__v," +
+      "    toName(status__v) as status," +
       "    toName(marc_review_tier__c) as marc_review_tier," +
       "    planned_first_use_date__c," +
       "    review_due_date__c," +
@@ -91,6 +92,10 @@ public class AgendaApp {
       "  from documents where id = " + intDocId
     );
     String documentNumber = queryResult.getValue("document_number__v", ValueType.STRING);
+    String status = queryResult.getValue("status", ValueType.PICKLIST_VALUES).get(0);
+    if (status.equals("in_periodic_review__c") || status.equals("expiration_extension_in_review__c")) {
+      documentNumber = documentNumber + " (reapproval)";
+    }
     record.setValue("topic__c", documentNumber);
     List<String> reviewTier = queryResult.getValue("marc_review_tier", ValueType.PICKLIST_VALUES);
     record.setValue("marc_review_tier__c", reviewTier);
